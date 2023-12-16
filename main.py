@@ -1,63 +1,80 @@
-import streamlit as st
-from langchain.prompts import PromptTemplate
-from langchain.llms import CTransformers
+from flask_ngrok import run_with_ngrok
+from flask import Flask, request, jsonify
 
-## Function To get response from LLAma 2 model
+# Start flask app and set to ngrok
+app = Flask(__name__)
+run_with_ngrok(app)
 
-def getLLamaresponse(input_text,no_words,blog_style):
+# llm code
 
-    ### LLama2 model
-    llm=CTransformers(model='models/llama-2-7b-chat.ggmlv3.q8_0.bin',
-                      model_type='llama',
-                      config={'max_new_tokens':256,
-                              'temperature':0.01})
+model_name_or_path = "TheBloke/Llama-2-13B-chat-GGML"
+model_basename = "llama-2-13b-chat.ggmlv3.q5_1.bin" # the model is in bin format
+
+from huggingface_hub import hf_hub_download
+from llama_cpp import Llama
+
+model_path = hf_hub_download(repo_id=model_name_or_path, filename=model_basename)
+
+# GPU
+lcpp_llm = None
+lcpp_llm = Llama(
+    model_path=model_path,
+    n_threads=2, # CPU cores
+    n_batch=512, # Should be between 1 and n_ctx, consider the amount of VRAM in your GPU.
+    n_gpu_layers=32 # Change this value based on your model and your GPU VRAM pool.
+    )
+
+# See the number of layers in GPU
+lcpp_llm.params.n_gpu_layers
+
+
+
+# model function
+def get_llm_Inference(prompt):
+  # prompt = "Write a linear regression in python"
+  prompt_template=f'''SYSTEM: You are a helpful, respectful and honest assistant. Always answer as helpfully.
+
+  USER: {prompt}
+
+  ASSISTANT:
+  '''
+
+  response=lcpp_llm(prompt=prompt_template, max_tokens=256, temperature=0.5, top_p=0.95, repeat_penalty=1.2, top_k=150, echo=True)
+
+  llamResponse = response["choices"][0]["text"]
+  # print(llamResponse)
+  return llamResponse
+
+
+# ------------------------------------ Flask App ------------------------------------
+
+
+@app.route('/chat', methods=['POST'])
+def generate_image():
+    prompt = request.form['message']
+    print(f"Generating an response for {prompt}")
+    llm_res = get_llm_Inference(prompt)
+
+    # colorPalate = ["orange", "dark orange", "blue", "red", "white"]
+
     
-    ## Prompt Template
-
-    template="""
-        Write a blog for {blog_style} job profile for a topic {input_text}
-        within {no_words} words.
-            """
+    response_data = {
+        "message": "Data received successfully",
+        "color_select": [1, 0, 0, 0],  # body color, mirror, wheel, caliber
+        "chat_response": llm_res,
+                    }
     
-    prompt=PromptTemplate(input_variables=["blog_style","input_text",'no_words'],
-                          template=template)
-    
-    ## Generate the ressponse from the LLama 2 model
-    response=llm(prompt.format(blog_style=blog_style,input_text=input_text,no_words=no_words))
-    print(response)
-    return response
+    return jsonify(response_data)
 
 
+if __name__ == '__main__':
+    app.run()
 
-
-
-
-st.set_page_config(page_title="Generate Blogs",
-                    page_icon='🤖',
-                    layout='centered',
-                    initial_sidebar_state='collapsed')
-
-st.header("Generate Blogs 🤖")
-
-input_text=st.text_input("Enter the Blog Topic")
-
-## creating to more columns for additonal 2 fields
-
-col1,col2=st.columns([5,5])
-
-with col1:
-    no_words=st.text_input('No of Words')
-with col2:
-    blog_style=st.selectbox('Writing the blog for',
-                            ('Researchers','Data Scientist','Common People'),index=0)
-    
-submit=st.button("Generate")
-
-## Final response
-if submit:
-    st.write(getLLamaresponse(input_text,no_words,blog_style))
 
 '''
-curl -O https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGML/blob/main/llama-2-7b-chat.ggmlv3.q8_0.bin
+pip install pyngrok
+pip install flask_ngrok
 
+!pip install pyngrok
+!pip install flask_ngrok
 '''
