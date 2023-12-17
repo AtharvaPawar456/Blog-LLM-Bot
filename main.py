@@ -47,7 +47,9 @@ def get_llm_Inference(prompt):
 
 
 # ------------------------------------ Flask App ------------------------------------
-
+@app.route("/")
+def hello():
+    return "Hello, World! with LLama2 LLM Model"
 
 @app.route('/chat', methods=['POST'])
 def generate_image():
